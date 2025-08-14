@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Editor de ePub Interactivo</title>
+    
+    <!-- Tailwind CSS para un diseño moderno -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Librerías necesarias -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/epubjs/dist/epub.min.js"></script>
+    
+    <!-- Editor de código CodeMirror -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/theme/material-darker.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/mode/xml/xml.min.js"></script>
+
+    <!-- Embellecedor de código HTML -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/js-beautify/1.14.11/beautify-html.min.js"></script>
+
+    <style>
+        /* Estilos personalizados */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .CodeMirror {
+            border: 1px solid #ddd;
+            border-radius: 0.5rem;
+            height: 60vh;
+        }
+        .file-item {
+            cursor: pointer;
+            transition: background-color 0.2s, color 0.2s;
+        }
+        .file-item:hover {
+            background-color: #e5e7eb; /* gray-200 */
+        }
+        .file-item.selected {
+            background-color: #3b82f6; /* blue-500 */
+            color: white;
+            font-weight: bold;
+        }
+        /* Estilo para archivos modificados */
+        .file-item.modified {
+            background-color: #16a34a; /* green-600 */
+            color: white;
+        }
+        .file-item.modified:hover {
+             background-color: #15803d; /* green-700 */
+        }
+        /* **NUEVO**: Estilos para el modal de creación de portada */
+        #cover-creator-modal {
+            transition: opacity 0.3s ease;
+        }
+        .color-swatch {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid transparent;
+        }
+        .color-swatch.selected {
+            border-color: #3b82f6; /* blue-500 */
+            transform: scale(1.1);
+        }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div class="container mx-auto p-4 md:p-8">
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-gray-900">Editor de ePub Interactivo</h1>
+            <p class="text-lg text-gray-600 mt-2">«Sube, edita el HTML de tus eBooks y descárgalos modificados»</p>
+        </header>
+
+        <!-- Sección de Carga de Archivo -->
+        <div id="upload-section" class="max-w-2xl mx-auto bg-white p-8 rounded-xl shadow-lg text-center">
+            <h2 class="text-2xl font-semibold mb-4">1. Sube tu archivo ePub</h2>
+            <p class="text-gray-500 mb-6">Arrastra y suelta el archivo o haz clic para seleccionarlo.</p>
+            <label for="epub-upload" class="bg-blue-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-blue-700 transition-colors cursor-pointer inline-block">
+                Seleccionar Archivo .epub
+            </label>
+            <input type="file" id="epub-upload" class="hidden" accept=".epub">
+            <p id="status-message" class="mt-6 text-lg font-medium"></p>
+        </div>
+
+        <!-- Sección Principal de Edición (inicialmente oculta) -->
+        <main id="editor-section" class="hidden grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Columna Izquierda: Portada y Archivos -->
+            <aside class="lg:col-span-1 bg-white p-6 rounded-xl shadow-lg flex flex-col gap-6">
+                <!-- Sección de Portada -->
+                <div id="cover-section">
+                    <h2 class="text-2xl font-semibold mb-4 border-b pb-2">Portada</h2>
+                    <img id="cover-preview" src="https://placehold.co/300x450/e2e8f0/64748b?text=Portada" alt="Vista previa de la portada" class="w-full h-auto object-contain rounded-md mb-4 border bg-gray-50 max-h-80">
+                    <div class="grid grid-cols-2 gap-2">
+                         <button id="download-cover-button" class="w-full bg-indigo-500 text-white text-sm font-bold py-2 px-4 rounded-lg hover:bg-indigo-600 transition-colors" disabled>Descargar</button>
+                         <label for="cover-upload" class="w-full bg-gray-700 text-white text-sm font-bold py-2 px-4 rounded-lg hover:bg-gray-800 transition-colors cursor-pointer text-center">Cambiar</label>
+                         <input type="file" id="cover-upload" class="hidden" accept="image/jpeg, image/png, image/gif">
+                    </div>
+                    <!-- **NUEVO**: Botón para crear portada -->
+                    <button id="create-cover-button" class="w-full mt-2 bg-teal-600 text-white text-sm font-bold py-2 px-4 rounded-lg hover:bg-teal-700 transition-colors">Crear Portada</button>
+                </div>
+                
+                <!-- Sección de Páginas -->
+                <div>
+                    <h2 class="text-2xl font-semibold mb-4 border-b pb-2">Páginas del ePub</h2>
+                    <div id="file-list" class="space-y-2 max-h-[45vh] overflow-y-auto">
+                        <!-- La lista de archivos se generará aquí -->
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Columna Derecha: Editor -->
+            <div class="lg:col-span-2 bg-white p-6 rounded-xl shadow-lg">
+                <h2 class="text-2xl font-semibold mb-4">Contenido HTML</h2>
+                <div id="editor-container">
+                    <textarea id="html-editor"></textarea>
+                </div>
+                <!-- Botones de acción del editor -->
+                <div class="mt-6 flex flex-wrap gap-4">
+                     <button id="save-file-button" class="flex-grow bg-green-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-green-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed" disabled>Guardar Cambios</button>
+                     <button id="copy-code-button" class="flex-grow bg-blue-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed" disabled>Copiar HTML</button>
+                     <button id="clear-code-button" class="flex-grow bg-red-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed" disabled>Borrar Código</button>
+                     <button id="download-epub-button" class="w-full mt-4 bg-purple-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-purple-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed" disabled>Descargar ePub Modificado</button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- **NUEVO**: Modal para el creador de portadas -->
+    <div id="cover-creator-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 hidden z-50">
+        <div class="bg-white rounded-lg p-8 w-full max-w-md shadow-xl">
+            <h3 class="text-2xl font-bold mb-6">Crear Nueva Portada</h3>
+            <div class="space-y-4">
+                <div>
+                    <label for="cover-title" class="block text-sm font-medium text-gray-700">Título del Libro</label>
+                    <input type="text" id="cover-title" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                <div>
+                    <label for="cover-author" class="block text-sm font-medium text-gray-700">Autor</label>
+                    <input type="text" id="cover-author" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Color de Fondo</label>
+                    <div id="color-swatches" class="flex gap-3">
+                        <div class="color-swatch selected" style="background-color: #1e3a8a;" data-color="#1e3a8a"></div>
+                        <div class="color-swatch" style="background-color: #4b5563;" data-color="#4b5563"></div>
+                        <div class="color-swatch" style="background-color: #991b1b;" data-color="#991b1b"></div>
+                        <div class="color-swatch" style="background-color: #14532d;" data-color="#14532d"></div>
+                        <div class="color-swatch" style="background-color: #581c87;" data-color="#581c87"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-8 flex justify-end gap-4">
+                <button id="cancel-cover-creation" class="bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-lg hover:bg-gray-300">Cancelar</button>
+                <button id="generate-cover-button" class="bg-teal-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-teal-700">Generar y Usar</button>
+            </div>
+        </div>
+    </div>
+    <canvas id="cover-canvas" width="600" height="900" class="hidden"></canvas>
+
+
+    <script>
+        // Referencias a los elementos del DOM
+        const uploadInput = document.getElementById('epub-upload');
+        const uploadSection = document.getElementById('upload-section');
+        const editorSection = document.getElementById('editor-section');
+        const fileListContainer = document.getElementById('file-list');
+        const editorTextarea = document.getElementById('html-editor');
+        const saveButton = document.getElementById('save-file-button');
+        const downloadButton = document.getElementById('download-epub-button');
+        const statusMessage = document.getElementById('status-message');
+        const coverSection = document.getElementById('cover-section');
+        const coverPreview = document.getElementById('cover-preview');
+        const downloadCoverButton = document.getElementById('download-cover-button');
+        const coverUploadInput = document.getElementById('cover-upload');
+        const copyCodeButton = document.getElementById('copy-code-button');
+        const clearCodeButton = document.getElementById('clear-code-button');
+        // **NUEVO**: Referencias del modal
+        const createCoverButton = document.getElementById('create-cover-button');
+        const coverCreatorModal = document.getElementById('cover-creator-modal');
+        const cancelCoverCreationButton = document.getElementById('cancel-cover-creation');
+        const generateCoverButton = document.getElementById('generate-cover-button');
+        const colorSwatchesContainer = document.getElementById('color-swatches');
+
+        // Variables globales
+        let book = null;
+        let zip = null;
+        let editor = null;
+        let currentFilePath = null;
+        let originalFileName = 'ebook.epub';
+        let coverImagePath = null;
+        let modifiedFiles = new Set();
+
+        // Inicializar el editor CodeMirror
+        editor = CodeMirror.fromTextArea(editorTextarea, {
+            mode: 'xml',
+            theme: 'material-darker',
+            lineNumbers: true,
+            lineWrapping: true,
+        });
+        editor.setValue("<!-- Selecciona un archivo de la lista para empezar a editar. -->");
+        editor.setOption("readOnly", true);
+
+
+        // Event listeners
+        uploadInput.addEventListener('change', handleFileSelect);
+        coverUploadInput.addEventListener('change', handleNewCoverUpload);
+        downloadCoverButton.addEventListener('click', downloadCover);
+        copyCodeButton.addEventListener('click', copyEditorContent);
+        clearCodeButton.addEventListener('click', clearEditorContent);
+        // **NUEVO**: Listeners del modal
+        createCoverButton.addEventListener('click', () => coverCreatorModal.classList.remove('hidden'));
+        cancelCoverCreationButton.addEventListener('click', () => coverCreatorModal.classList.add('hidden'));
+        generateCoverButton.addEventListener('click', generateAndApplyCover);
+        colorSwatchesContainer.addEventListener('click', (e) => {
+            if (e.target.classList.contains('color-swatch')) {
+                document.querySelectorAll('.color-swatch').forEach(sw => sw.classList.remove('selected'));
+                e.target.classList.add('selected');
+            }
+        });
+
+
+        async function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            if (!file.name.toLowerCase().endsWith('.epub')) {
+                statusMessage.textContent = 'Error: Por favor, selecciona un archivo .epub válido.';
+                statusMessage.className = 'mt-6 text-lg font-medium text-red-600';
+                return;
+            }
+            
+            originalFileName = file.name;
+            statusMessage.textContent = 'Cargando y procesando el ePub...';
+            statusMessage.className = 'mt-6 text-lg font-medium text-blue-600';
+
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                zip = await JSZip.loadAsync(arrayBuffer);
+                book = ePub(arrayBuffer);
+                await book.ready;
+
+                uploadSection.classList.add('hidden');
+                editorSection.classList.remove('hidden');
+
+                populateFileList();
+                await findAndDisplayCover();
+            } catch (error) {
+                console.error("Error al procesar el ePub:", error);
+                statusMessage.textContent = 'Error: El archivo está dañado o no es un ePub válido.';
+                statusMessage.className = 'mt-6 text-lg font-medium text-red-600';
+                uploadSection.classList.remove('hidden');
+                editorSection.classList.add('hidden');
+            }
+        }
+
+        function populateFileList() {
+            fileListContainer.innerHTML = '';
+            if (!zip) return;
+
+            Object.keys(zip.files).forEach(filePath => {
+                const lowerCasePath = filePath.toLowerCase();
+                if (!zip.files[filePath].dir && (lowerCasePath.endsWith('.html') || lowerCasePath.endsWith('.xhtml'))) {
+                    const fileItem = document.createElement('div');
+                    fileItem.textContent = filePath.split('/').pop();
+                    fileItem.title = filePath;
+                    fileItem.className = 'file-item p-3 rounded-md border border-gray-200';
+                    fileItem.dataset.path = filePath;
+                    
+                    if (modifiedFiles.has(filePath)) {
+                        fileItem.classList.add('modified');
+                    }
+
+                    fileItem.addEventListener('click', () => loadFileIntoEditor(filePath));
+                    fileListContainer.appendChild(fileItem);
+                }
+            });
+
+            if (fileListContainer.children.length === 0) {
+                fileListContainer.innerHTML = '<p class="text-gray-500 p-3">No se encontraron archivos HTML/XHTML.</p>';
+            }
+        }
+
+        async function findAndDisplayCover() {
+            let coverPath = null;
+            const coverLabel = document.querySelector('label[for="cover-upload"]');
+
+            if (book.packaging && book.packaging.manifest) {
+                for (const key in book.packaging.manifest) {
+                    const item = book.packaging.manifest[key];
+                    if (item.properties && item.properties.includes('cover-image')) {
+                        coverPath = item.href;
+                        break;
+                    }
+                }
+            }
+
+            if (!coverPath) {
+                const commonNames = ['cover.jpeg', 'cover.jpg', 'cover.png', 'portada.jpeg', 'portada.jpg', 'portada.png'];
+                for (const filePath in zip.files) {
+                    const fileName = filePath.split('/').pop().toLowerCase();
+                    if (commonNames.includes(fileName)) {
+                        coverPath = filePath;
+                        break;
+                    }
+                }
+            }
+
+            if (!coverPath && book.spine) {
+                for (const section of book.spine.items.slice(0, 5)) {
+                    try {
+                        const htmlContent = await zip.file(section.href).async("string");
+                        const parser = new DOMParser();
+                        const doc = parser.parseFromString(htmlContent, "application/xhtml+xml");
+                        const img = doc.querySelector("img[src]");
+                        if (img && img.src) {
+                            const baseUrl = new URL(section.href, "file://base/");
+                            const fullUrl = new URL(img.src, baseUrl);
+                            const potentialPath = decodeURIComponent(fullUrl.pathname.substring(1));
+                            if (zip.file(potentialPath)) {
+                                coverPath = potentialPath;
+                                break;
+                            }
+                        }
+                    } catch (e) { /* Ignorar errores de parseo */ }
+                }
+            }
+            
+            if (coverPath) {
+                try {
+                    const fileInZip = zip.file(coverPath);
+                    if (fileInZip) {
+                        const coverBlob = await fileInZip.async("blob");
+                        const objectURL = URL.createObjectURL(coverBlob);
+                        coverPreview.src = objectURL;
+                        coverImagePath = coverPath;
+                        coverSection.classList.remove('hidden');
+                        downloadCoverButton.disabled = false;
+                        coverUploadInput.disabled = false;
+                        coverLabel.classList.remove('opacity-50', 'cursor-not-allowed');
+                    } else { throw new Error("Archivo no encontrado en zip"); }
+                } catch (error) {
+                    console.error("Error al cargar imagen de portada:", error);
+                    coverSection.classList.remove('hidden');
+                }
+            } else {
+                console.log("No se encontró una portada detectable. El usuario puede crear una.");
+                coverSection.classList.remove('hidden'); // Mostrar sección para que pueda crear una
+            }
+        }
+
+        async function loadFileIntoEditor(filePath) {
+            document.querySelectorAll('.file-item').forEach(item => {
+                item.classList.toggle('selected', item.dataset.path === filePath);
+            });
+
+            currentFilePath = filePath;
+            try {
+                const content = await zip.file(filePath).async("string");
+                let beautifiedContent = content;
+                if (typeof html_beautify !== 'undefined') {
+                    beautifiedContent = html_beautify(content || '', { indent_size: 2, space_in_empty_paren: true, max_preserve_newlines: 1 });
+                }
+                
+                editor.setValue(beautifiedContent);
+                editor.setOption("readOnly", false);
+                editor.refresh();
+                saveButton.disabled = false;
+                copyCodeButton.disabled = false;
+                clearCodeButton.disabled = false;
+            } catch (error) {
+                console.error(`Error al cargar el archivo ${filePath}:`, error);
+                editor.setValue(`<!-- Error al cargar ${filePath}. -->`);
+                editor.setOption("readOnly", true);
+                saveButton.disabled = true;
+                copyCodeButton.disabled = true;
+                clearCodeButton.disabled = true;
+            }
+        }
+
+        saveButton.addEventListener('click', () => {
+            if (!currentFilePath || !editor) return;
+            const newContent = editor.getValue();
+            zip.file(currentFilePath, newContent);
+            modifiedFiles.add(currentFilePath);
+            const fileItem = fileListContainer.querySelector(`[data-path="${currentFilePath}"]`);
+            if (fileItem) fileItem.classList.add('modified');
+            downloadButton.disabled = false;
+            showNotification(`¡Cambios guardados para ${currentFilePath.split('/').pop()}!`);
+        });
+
+        // **FUNCIÓN CORREGIDA**
+        function copyEditorContent() {
+            const textToCopy = editor.getValue();
+            const tempTextArea = document.createElement('textarea');
+            tempTextArea.value = textToCopy;
+            document.body.appendChild(tempTextArea);
+            tempTextArea.select();
+            try {
+                document.execCommand('copy'); // Método más compatible
+                showNotification('¡Código HTML copiado al portapapeles!');
+            } catch (err) {
+                console.error('No se pudo copiar el texto: ', err);
+                showNotification('Error al copiar el texto.', 'error');
+            }
+            document.body.removeChild(tempTextArea);
+        }
+
+        function clearEditorContent() {
+            editor.setValue('');
+        }
+
+        async function handleNewCoverUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            // Si no hay una portada existente, asignamos una ruta por defecto.
+            if (!coverImagePath) {
+                coverImagePath = 'OEBPS/Images/cover.png';
+                console.log("No había portada. Se usará la nueva ruta:", coverImagePath);
+            }
+            const arrayBuffer = await file.arrayBuffer();
+            zip.file(coverImagePath, arrayBuffer);
+            coverPreview.src = URL.createObjectURL(file);
+            downloadButton.disabled = false;
+            downloadCoverButton.disabled = false;
+            showNotification("Portada actualizada. ¡No olvides descargar el ePub!");
+        }
+
+        async function downloadCover() {
+            if (!coverImagePath) return;
+            const file = zip.file(coverImagePath);
+            if (file) {
+                const blob = await file.async("blob");
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = `portada_${originalFileName.replace('.epub', '')}.${coverImagePath.split('.').pop()}`;
+                link.click();
+                URL.revokeObjectURL(link.href);
+            }
+        }
+
+        async function generateAndApplyCover() {
+            const canvas = document.getElementById('cover-canvas');
+            const ctx = canvas.getContext('2d');
+            const title = document.getElementById('cover-title').value || 'Título Desconocido';
+            const author = document.getElementById('cover-author').value || 'Autor Desconocido';
+            const bgColor = document.querySelector('.color-swatch.selected').dataset.color;
+
+            // Dibujar en el canvas
+            ctx.fillStyle = bgColor;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.fillStyle = 'white';
+            ctx.textAlign = 'center';
+
+            // Título (con ajuste de texto simple)
+            ctx.font = 'bold 60px Inter, sans-serif';
+            const maxWidth = canvas.width - 80;
+            const words = title.split(' ');
+            let line = '';
+            let y = 200;
+            for(let n = 0; n < words.length; n++) {
+                let testLine = line + words[n] + ' ';
+                let metrics = ctx.measureText(testLine);
+                if (metrics.width > maxWidth && n > 0) {
+                    ctx.fillText(line, canvas.width / 2, y);
+                    line = words[n] + ' ';
+                    y += 70;
+                } else {
+                    line = testLine;
+                }
+            }
+            ctx.fillText(line, canvas.width / 2, y);
+
+            // Autor
+            ctx.font = '40px Inter, sans-serif';
+            ctx.fillText(author, canvas.width / 2, y + 100);
+
+            // Convertir canvas a blob y aplicar
+            canvas.toBlob(async (blob) => {
+                if (!coverImagePath) {
+                    coverImagePath = 'OEBPS/Images/cover.png'; // Ruta por defecto
+                }
+                const arrayBuffer = await blob.arrayBuffer();
+                zip.file(coverImagePath, arrayBuffer);
+                coverPreview.src = URL.createObjectURL(blob);
+                downloadButton.disabled = false;
+                downloadCoverButton.disabled = false;
+                coverCreatorModal.classList.add('hidden');
+                showNotification("¡Nueva portada generada y aplicada!");
+            }, 'image/png');
+        }
+
+        downloadButton.addEventListener('click', async () => {
+            if (!zip) return;
+            statusMessage.textContent = 'Empaquetando tu ePub modificado...';
+            statusMessage.className = 'mt-6 text-lg font-medium text-purple-600';
+            editorSection.classList.add('hidden');
+            uploadSection.classList.remove('hidden');
+
+            try {
+                const newEpubBlob = await zip.generateAsync({ type: "blob", mimeType: "application/epub+zip" });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(newEpubBlob);
+                link.download = `modificado_${originalFileName}`;
+                link.click();
+                URL.revokeObjectURL(link.href);
+                statusMessage.textContent = '¡Descarga completada! Puedes subir otro archivo.';
+                statusMessage.className = 'mt-6 text-lg font-medium text-green-600';
+            } catch (error) {
+                console.error("Error al generar el ePub:", error);
+                statusMessage.textContent = 'Error al generar el archivo final.';
+                statusMessage.className = 'mt-6 text-lg font-medium text-red-600';
+            } finally {
+                 setTimeout(() => location.reload(), 4000);
+            }
+        });
+
+        function showNotification(message, type = 'success') {
+            const modal = document.createElement('div');
+            const bgColor = type === 'success' ? '#28a745' : '#3b82f6'; // Verde para éxito, azul para info
+            modal.style.cssText = `position:fixed; top:20px; left:50%; transform:translateX(-50%); background-color:${bgColor}; color:white; padding:15px 25px; border-radius:8px; z-index:1000; box-shadow:0 4px 15px rgba(0,0,0,0.2);`;
+            modal.textContent = message;
+            document.body.appendChild(modal);
+            setTimeout(() => {
+                if (document.body.contains(modal)) document.body.removeChild(modal);
+            }, 3000);
+        }
+
+    </script>
+</body>
+</html>
